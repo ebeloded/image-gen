@@ -3,15 +3,17 @@
   "version": "1.0.1",
   "description": "MCP server for AI image generation using OpenAI and Google Gemini",
   "type": "module",
-  "main": "index.ts",
+  "main": "mcp.ts",
   "bin": {
-    "images-mcp": "index.ts"
+    "images-mcp": "cli.ts"
   },
   "files": [
-    "index.ts"
+    "cli.ts",
+    "core.ts",
+    "mcp.ts"
   ],
   "scripts": {
-    "start": "bun run index.ts"
+    "start": "bun run mcp.ts"
   },
   "keywords": [
     "mcp",
