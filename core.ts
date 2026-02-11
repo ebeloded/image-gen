@@ -117,6 +117,8 @@ export async function generateOpenAIImage({
       prompt,
       image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
       size: size === "auto" ? undefined : size,
+      background,
+      output_format: "png",
     } as Parameters<OpenAI["images"]["edit"]>[0]);
 
     imageData = (response as OpenAI.ImagesResponse).data?.[0]?.b64_json;
