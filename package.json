@@ -10,10 +10,12 @@
   "files": [
     "cli.ts",
     "core.ts",
-    "mcp.ts"
+    "mcp.ts",
+    "schemas.ts"
   ],
   "scripts": {
-    "start": "bun run mcp.ts"
+    "start": "bun run mcp.ts",
+    "test": "bun test"
   },
   "keywords": [
     "mcp",

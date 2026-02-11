@@ -2,11 +2,22 @@
 import {
   generateGeminiImage,
   generateOpenAIImage,
+} from "./core.ts";
+import {
+  geminiAspectRatioSchema,
+  geminiImageSizeSchema,
+  geminiModelSchema,
+  geminiParamsSchema,
+  openAIBackgroundSchema,
+  openAIModelSchema,
+  openAIParamsSchema,
+  openAIQualitySchema,
+  openAISizeSchema,
   type GeminiParams,
   type OpenAIParams,
-} from "./core.ts";
+} from "./schemas.ts";
 
-type ParsedArgs =
+export type ParsedArgs =
   | { mode: "openai"; params: OpenAIParams }
   | { mode: "gemini"; params: GeminiParams }
   | { mode: "help"; message?: string };
@@ -39,7 +50,30 @@ Gemini args:
 `);
 }
 
-function parseArgs(argv: string[]): ParsedArgs {
+const COMMON_FLAGS = new Set(["prompt", "output", "input", "inputs"]);
+const OPENAI_FLAGS = new Set(["model", "size", "quality", "background"]);
+const GEMINI_FLAGS = new Set(["model", "aspect-ratio", "image-size"]);
+
+const formatEnumError = (flag: string, value: string, allowed: readonly string[]) =>
+  `Invalid value for --${flag}: "${value}". Allowed values: ${allowed.join(", ")}`;
+const isAllowedEnumValue = (value: string, allowed: readonly string[]) => allowed.includes(value);
+
+const formatUnknownFlagsError = (command: "openai" | "gemini", flags: string[]) =>
+  `Unknown flag(s) for ${command}: ${flags.map((flag) => `--${flag}`).join(", ")}`;
+
+const firstValue = (flags: Record<string, string[]>, key: string) => flags[key]?.[0];
+
+const parseInputImages = (flags: Record<string, string[]>) => {
+  const input = flags.input ?? [];
+  const inputs = flags.inputs ?? [];
+  const all = [...input, ...inputs];
+  return all.length > 0 ? all : undefined;
+};
+
+const allowedFlagsForCommand = (command: "openai" | "gemini") =>
+  new Set([...COMMON_FLAGS, ...(command === "openai" ? OPENAI_FLAGS : GEMINI_FLAGS)]);
+
+export function parseArgs(argv: string[]): ParsedArgs {
   if (argv.length === 0) return { mode: "help" };
 
   const command = argv[0];
@@ -69,34 +103,85 @@ function parseArgs(argv: string[]): ParsedArgs {
     i += 1;
   }
 
-  const prompt = flags.prompt?.[0];
-  const output_path = flags.output?.[0];
-  const input_images = flags.input ?? flags.inputs;
+  const allowedFlags = allowedFlagsForCommand(command);
+  const unknownFlags = Object.keys(flags).filter((flag) => !allowedFlags.has(flag));
+  if (unknownFlags.length > 0) {
+    return { mode: "help", message: formatUnknownFlagsError(command, unknownFlags) };
+  }
+
+  const prompt = firstValue(flags, "prompt");
+  const output_path = firstValue(flags, "output");
+  const input_images = parseInputImages(flags);
 
   if (!prompt || !output_path) {
     return { mode: "help", message: "Missing required --prompt or --output" };
   }
 
   if (command === "openai") {
-    const params: OpenAIParams = {
+    const model = firstValue(flags, "model") ?? "gpt-image-1.5";
+    const size = firstValue(flags, "size") ?? "auto";
+    const quality = firstValue(flags, "quality") ?? "auto";
+    const background = firstValue(flags, "background") ?? "auto";
+
+    if (!isAllowedEnumValue(model, openAIModelSchema.options)) {
+      return { mode: "help", message: formatEnumError("model", model, openAIModelSchema.options) };
+    }
+    if (!isAllowedEnumValue(size, openAISizeSchema.options)) {
+      return { mode: "help", message: formatEnumError("size", size, openAISizeSchema.options) };
+    }
+    if (!isAllowedEnumValue(quality, openAIQualitySchema.options)) {
+      return { mode: "help", message: formatEnumError("quality", quality, openAIQualitySchema.options) };
+    }
+    if (!isAllowedEnumValue(background, openAIBackgroundSchema.options)) {
+      return { mode: "help", message: formatEnumError("background", background, openAIBackgroundSchema.options) };
+    }
+
+    const validated = openAIParamsSchema.safeParse({
       prompt,
       output_path,
-      model: (flags.model?.[0] as OpenAIParams["model"]) ?? "gpt-image-1.5",
+      model,
       input_images,
-      size: (flags.size?.[0] as OpenAIParams["size"]) ?? "auto",
-      quality: (flags.quality?.[0] as OpenAIParams["quality"]) ?? "auto",
-      background: (flags.background?.[0] as OpenAIParams["background"]) ?? "auto",
+      size,
+      quality,
+      background,
+    });
+    if (!validated.success) {
+      return { mode: "help", message: `Invalid OpenAI parameters: ${validated.error.issues[0]?.message ?? "Unknown error"}` };
+    }
+
+    const params: OpenAIParams = {
+      ...validated.data,
     };
     return { mode: "openai", params };
   }
 
-  const params: GeminiParams = {
+  const model = firstValue(flags, "model") ?? "gemini-3-pro-image-preview";
+  const aspectRatio = firstValue(flags, "aspect-ratio");
+  const imageSize = firstValue(flags, "image-size");
+  if (!isAllowedEnumValue(model, geminiModelSchema.options)) {
+    return { mode: "help", message: formatEnumError("model", model, geminiModelSchema.options) };
+  }
+  if (aspectRatio && !isAllowedEnumValue(aspectRatio, geminiAspectRatioSchema.options)) {
+    return { mode: "help", message: formatEnumError("aspect-ratio", aspectRatio, geminiAspectRatioSchema.options) };
+  }
+  if (imageSize && !isAllowedEnumValue(imageSize, geminiImageSizeSchema.options)) {
+    return { mode: "help", message: formatEnumError("image-size", imageSize, geminiImageSizeSchema.options) };
+  }
+
+  const validated = geminiParamsSchema.safeParse({
     prompt,
     output_path,
-    model: (flags.model?.[0] as GeminiParams["model"]) ?? "gemini-3-pro-image-preview",
+    model,
     input_images,
-    aspect_ratio: flags["aspect-ratio"]?.[0] as GeminiParams["aspect_ratio"],
-    image_size: flags["image-size"]?.[0] as GeminiParams["image_size"],
+    aspect_ratio: aspectRatio,
+    image_size: imageSize,
+  });
+  if (!validated.success) {
+    return { mode: "help", message: `Invalid Gemini parameters: ${validated.error.issues[0]?.message ?? "Unknown error"}` };
+  }
+
+  const params: GeminiParams = {
+    ...validated.data,
   };
   return { mode: "gemini", params };
 }
@@ -126,4 +211,6 @@ async function run() {
   }
 }
 
-await run();
+if (import.meta.main) {
+  await run();
+}

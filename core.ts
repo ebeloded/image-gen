@@ -1,6 +1,8 @@
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
 import path from "node:path";
+import type { GeminiParams, OpenAIParams } from "./schemas.ts";
+export type { GeminiParams, OpenAIParams } from "./schemas.ts";
 
 const MIME_TYPES: Record<string, string> = {
   ".png": "image/png",
@@ -11,25 +13,6 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 type GenerateResult<T> = { ok: true; data: T } | { ok: false; error: string };
-
-export type OpenAIParams = {
-  prompt: string;
-  output_path: string;
-  model: "gpt-image-1.5";
-  input_images?: string[];
-  size: "auto" | "1024x1024" | "1536x1024" | "1024x1536";
-  quality: "auto" | "high" | "medium" | "low";
-  background: "auto" | "transparent" | "opaque";
-};
-
-export type GeminiParams = {
-  prompt: string;
-  output_path: string;
-  model: "gemini-2.5-flash-image" | "gemini-3-pro-image-preview";
-  input_images?: string[];
-  aspect_ratio?: "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "4:5" | "5:4" | "9:16" | "16:9" | "21:9";
-  image_size?: "1K" | "2K" | "4K";
-};
 
 export type OpenAIResult = {
   success: true;
