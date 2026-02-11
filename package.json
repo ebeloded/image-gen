@@ -15,7 +15,9 @@
   ],
   "scripts": {
     "start": "bun run mcp.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit",
+    "ci:check": "bun run test && bun run typecheck"
   },
   "keywords": [
     "mcp",
