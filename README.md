@@ -2,6 +2,10 @@
 
 Generate and edit images from the command line (`images-mcp`) or as an MCP server.
 
+## Requirements
+
+- Bun `>=1.0.0`
+
 ## CLI (Primary Interface)
 
 ### Quick Start
@@ -55,7 +59,7 @@ Common flags (both commands):
 | `--prompt <text>` | yes | - | Prompt or edit instructions |
 | `--output <path>` | yes | - | Output file path |
 | `--input <path>` | no | - | Repeatable input image path |
-| `--inputs <path>` | no | - | Backward-compatible alias of `--input` |
+| `--inputs <path>` | no | - | Backward-compatible alias of `--input` (accepted, not shown in built-in help text) |
 | `--help`, `-h` | no | - | Print usage |
 
 OpenAI flags (`images-mcp openai`):
@@ -67,6 +71,10 @@ OpenAI flags (`images-mcp openai`):
 | `--quality <value>` | no | `auto` | `auto`, `high`, `medium`, `low` |
 | `--background <value>` | no | `auto` | `auto`, `transparent`, `opaque` |
 
+OpenAI output file extensions:
+
+- `.png`, `.jpg`, `.jpeg`, `.webp`
+
 Gemini flags (`images-mcp gemini`):
 
 | Flag | Required | Default | Allowed values |
@@ -74,6 +82,10 @@ Gemini flags (`images-mcp gemini`):
 | `--model <value>` | no | `gemini-3-pro-image-preview` | `gemini-3-pro-image-preview`, `gemini-2.5-flash-image` |
 | `--aspect-ratio <value>` | no | unset | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9` |
 | `--image-size <value>` | no | unset | `1K`, `2K`, `4K` |
+
+Gemini output file extensions:
+
+- `.png`
 
 ### CLI Examples
 
@@ -136,14 +148,19 @@ Provider-specific success fields:
 
 - Exit `0`: Help (`--help`) or successful generation.
 - Exit `1`: Argument parsing/validation errors, runtime errors, API/auth errors, file errors.
-- Errors are written to stderr with `Error: <message>`.
+- Parse/validation errors are written to `stderr` as `<message>` followed by usage.
+- Runtime errors are written to `stderr` as `Error: <message>`.
 
 Common parse failures:
 
 - Missing required flags:
   - `Missing required --prompt or --output`
+- Missing value for a flag:
+  - `Missing value for --output`
 - Unknown flags:
   - `Unknown flag(s) for openai: --foo`
+- Unexpected positional argument:
+  - `Unexpected argument: value`
 - Invalid enum value:
   - `Invalid value for --size: "500x500". Allowed values: auto, 1024x1024, 1536x1024, 1024x1536`
 

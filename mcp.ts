@@ -14,81 +14,82 @@ const successResponse = (data: object) => textContent(JSON.stringify(data, null,
 const formatValidationError = (error: z.ZodError) =>
   error.issues.map((issue) => `${issue.path.join(".") || "input"}: ${issue.message}`).join("; ");
 
-const server = new McpServer({
-  name: "images-mcp",
-  version: "1.0.0",
-});
+export function createMcpServer(): McpServer {
+  const server = new McpServer({
+    name: "images-mcp",
+    version: "1.0.0",
+  });
 
-server.registerTool(
-  "openai_generate_image",
-  {
-    title: "OpenAI Image Generator",
-    description: "Generate an image using OpenAI and save it to a file. Can accept input images for editing.",
-    inputSchema: openAIInputShape,
-  },
-  async ({ prompt, output_path, model, input_images, size, quality, background }) => {
-    try {
-      const parsed = openAIParamsSchema.safeParse({
-        prompt,
-        output_path,
-        model,
-        input_images,
-        size,
-        quality,
-        background,
-      });
-      if (!parsed.success) return errorResponse(`Invalid OpenAI parameters: ${formatValidationError(parsed.error)}`);
-      const result = await generateOpenAIImage(parsed.data);
-      if (!result.ok) return errorResponse(result.error);
-      return successResponse(result.data);
-    } catch (error) {
-      return errorResponse(error instanceof Error ? error.message : String(error));
-    }
-  }
-);
-
-server.registerTool(
-  "gemini_generate_image",
-  {
-    title: "Gemini Image Generator",
-    description: "Generate or edit an image using Google Gemini and save it to a file. Can accept input images for editing.",
-    inputSchema: geminiInputShape,
-  },
-  async ({ prompt, output_path, model, input_images, aspect_ratio, image_size }) => {
-    try {
-      const parsed = geminiParamsSchema.safeParse({
-        prompt,
-        output_path,
-        model,
-        input_images,
-        aspect_ratio,
-        image_size,
-      });
-      if (!parsed.success) return errorResponse(`Invalid Gemini parameters: ${formatValidationError(parsed.error)}`);
-      const result = await generateGeminiImage(parsed.data);
-      if (!result.ok) return errorResponse(result.error);
-      return successResponse(result.data);
-    } catch (error) {
-      return errorResponse(error instanceof Error ? error.message : String(error));
-    }
-  }
-);
-
-server.registerPrompt(
-  "create-image",
-  {
-    description: "Generate an image using AI with professional prompting guidance",
-    argsSchema: {
-      description: z.string().describe("What image to create"),
+  server.registerTool(
+    "openai_generate_image",
+    {
+      title: "OpenAI Image Generator",
+      description: "Generate an image using OpenAI and save it to a file. Can accept input images for editing.",
+      inputSchema: openAIInputShape,
     },
-  },
-  async ({ description }) => ({
-    messages: [
-      {
-        role: "user",
-        content: {
-          type: "text",
-          text: `# Generate Image
+    async ({ prompt, output_path, model, input_images, size, quality, background }) => {
+      try {
+        const parsed = openAIParamsSchema.safeParse({
+          prompt,
+          output_path,
+          model,
+          input_images,
+          size,
+          quality,
+          background,
+        });
+        if (!parsed.success) return errorResponse(`Invalid OpenAI parameters: ${formatValidationError(parsed.error)}`);
+        const result = await generateOpenAIImage(parsed.data);
+        if (!result.ok) return errorResponse(result.error);
+        return successResponse(result.data);
+      } catch (error) {
+        return errorResponse(error instanceof Error ? error.message : String(error));
+      }
+    }
+  );
+
+  server.registerTool(
+    "gemini_generate_image",
+    {
+      title: "Gemini Image Generator",
+      description: "Generate or edit an image using Google Gemini and save it to a file. Can accept input images for editing.",
+      inputSchema: geminiInputShape,
+    },
+    async ({ prompt, output_path, model, input_images, aspect_ratio, image_size }) => {
+      try {
+        const parsed = geminiParamsSchema.safeParse({
+          prompt,
+          output_path,
+          model,
+          input_images,
+          aspect_ratio,
+          image_size,
+        });
+        if (!parsed.success) return errorResponse(`Invalid Gemini parameters: ${formatValidationError(parsed.error)}`);
+        const result = await generateGeminiImage(parsed.data);
+        if (!result.ok) return errorResponse(result.error);
+        return successResponse(result.data);
+      } catch (error) {
+        return errorResponse(error instanceof Error ? error.message : String(error));
+      }
+    }
+  );
+
+  server.registerPrompt(
+    "create-image",
+    {
+      description: "Generate an image using AI with professional prompting guidance",
+      argsSchema: {
+        description: z.string().describe("What image to create"),
+      },
+    },
+    async ({ description }) => ({
+      messages: [
+        {
+          role: "user",
+          content: {
+            type: "text",
+            text: `# Generate Image
 
 Create an image based on this request: **${description}**
 
@@ -172,12 +173,23 @@ MUST NOT include:
 ## Output
 
 Save to the current directory with a descriptive filename based on the content.`,
+          },
         },
-      },
-    ],
-  })
-);
+      ],
+    })
+  );
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error("Images MCP server running on stdio");
+  return server;
+}
+
+export async function startMcpServer() {
+  const server = createMcpServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error("Images MCP server running on stdio");
+  return server;
+}
+
+if (import.meta.main) {
+  await startMcpServer();
+}

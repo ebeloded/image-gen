@@ -12,6 +12,19 @@ const MIME_TYPES: Record<string, string> = {
   ".webp": "image/webp",
 };
 
+const OUTPUT_FORMATS = {
+  openai: {
+    ".png": { format: "png", mimeType: "image/png" },
+    ".jpg": { format: "jpeg", mimeType: "image/jpeg" },
+    ".jpeg": { format: "jpeg", mimeType: "image/jpeg" },
+    ".webp": { format: "webp", mimeType: "image/webp" },
+  },
+  gemini: {
+    ".png": { format: "png", mimeType: "image/png" },
+  },
+} as const;
+
+type Provider = keyof typeof OUTPUT_FORMATS;
 type GenerateResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 export type OpenAIResult = {
@@ -36,6 +49,29 @@ export type GeminiResult = {
 
 export function getMimeType(filePath: string): string {
   return MIME_TYPES[path.extname(filePath).toLowerCase()] || "image/png";
+}
+
+export function createOpenAIUploadFile(imageData: ArrayBuffer, imagePathOrName: string): File {
+  return new File([imageData], path.basename(imagePathOrName), { type: getMimeType(imagePathOrName) });
+}
+
+export function resolveOutputFormat(provider: Provider, outputPath: string):
+  | { ok: true; format: "png" | "jpeg" | "webp"; mimeType: string }
+  | { ok: false; error: string } {
+  const ext = path.extname(outputPath).toLowerCase();
+  const providerFormats = OUTPUT_FORMATS[provider] as Record<string, { format: "png" | "jpeg" | "webp"; mimeType: string }>;
+  const resolved = providerFormats[ext];
+
+  if (!resolved) {
+    const allowed = Object.keys(providerFormats).join(", ");
+    const shown = ext || "(none)";
+    return {
+      ok: false,
+      error: `Unsupported output extension for ${provider}: ${shown}. Allowed extensions: ${allowed}`,
+    };
+  }
+
+  return { ok: true, ...resolved };
 }
 
 export async function readImageFile(imagePath: string): Promise<{ data: ArrayBuffer; name: string } | { error: string }> {
@@ -83,6 +119,11 @@ export async function generateOpenAIImage({
   quality,
   background,
 }: OpenAIParams): Promise<GenerateResult<OpenAIResult>> {
+  const outputFormat = resolveOutputFormat("openai", output_path);
+  if (!outputFormat.ok) {
+    return { ok: false, error: outputFormat.error };
+  }
+
   let imageData: string | undefined;
 
   if (input_images?.length) {
@@ -92,7 +133,7 @@ export async function generateOpenAIImage({
       if ("error" in result) {
         return { ok: false, error: result.error };
       }
-      imageFiles.push(new File([result.data], result.name, { type: "image/png" }));
+      imageFiles.push(createOpenAIUploadFile(result.data, imagePath));
     }
 
     const response = await getOpenAI().images.edit({
@@ -101,7 +142,7 @@ export async function generateOpenAIImage({
       image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
       size: size === "auto" ? undefined : size,
       background,
-      output_format: "png",
+      output_format: outputFormat.format,
     } as Parameters<OpenAI["images"]["edit"]>[0]);
 
     imageData = (response as OpenAI.ImagesResponse).data?.[0]?.b64_json;
@@ -113,7 +154,7 @@ export async function generateOpenAIImage({
       size: size === "auto" ? undefined : size,
       quality,
       background,
-      output_format: "png",
+      output_format: outputFormat.format,
     } as Parameters<OpenAI["images"]["generate"]>[0]);
 
     imageData = (response as OpenAI.ImagesResponse).data?.[0]?.b64_json;
@@ -145,6 +186,11 @@ export async function generateGeminiImage({
   aspect_ratio,
   image_size,
 }: GeminiParams): Promise<GenerateResult<GeminiResult>> {
+  const outputFormat = resolveOutputFormat("gemini", output_path);
+  if (!outputFormat.ok) {
+    return { ok: false, error: outputFormat.error };
+  }
+
   const contents: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [{ text: prompt }];
 
   if (input_images?.length) {
