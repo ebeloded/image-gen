@@ -1,10 +1,17 @@
 #!/usr/bin/env bun
-import { Cli, Command, Option } from "clipanion";
 import tty from "node:tty";
 import {
   generateGeminiImage,
   generateOpenAIImage,
 } from "./core.ts";
+import {
+  buildCliUsageText,
+  commonFlags,
+  knownFlagsFor,
+  providerSpecs,
+  shortAliasToFlag,
+  type Provider,
+} from "./metadata.ts";
 import {
   geminiAspectRatioSchema,
   geminiImageSizeSchema,
@@ -24,164 +31,297 @@ export type ParsedArgs =
   | { mode: "gemini"; params: GeminiParams }
   | { mode: "help"; message?: string };
 
+type ParseState = {
+  values: Map<string, string[]>;
+  positionals: string[];
+};
+
+const SHORT_ALIASES = shortAliasToFlag();
+
 function printUsage(message?: string) {
   if (message) {
     console.error(message);
   }
   const write = message ? console.error : console.log;
-  write(`images-mcp (CLI)
-
-Usage:
-  images-mcp openai  [args]  Generate/edit via OpenAI
-  images-mcp gemini  [args]  Generate/edit via Gemini
-
-Common args:
-  --prompt        Text prompt (required unless piped via stdin)
-  --output        Output file path (required)
-  --input         Input image path (repeatable)
-
-OpenAI args:
-  --model         gpt-image-1.5 (default)
-  --size          auto | 1024x1024 | 1536x1024 | 1024x1536
-  --quality       auto | high | medium | low
-  --background    auto | transparent | opaque
-
-Gemini args:
-  --model         gemini-3-pro-image-preview (default) | gemini-2.5-flash-image
-  --aspect-ratio  1:1 | 2:3 | 3:2 | 3:4 | 4:3 | 4:5 | 5:4 | 9:16 | 16:9 | 21:9
-  --image-size    1K | 2K | 4K
-`);
+  write(buildCliUsageText());
 }
 
 const formatEnumError = (flag: string, value: string, allowed: readonly string[]) =>
   `Invalid value for --${flag}: "${value}". Allowed values: ${allowed.join(", ")}`;
-const isAllowedEnumValue = (value: string, allowed: readonly string[]) => allowed.includes(value);
+const isAllowedEnumValue = <T extends string>(value: string, allowed: readonly T[]): value is T => allowed.includes(value as T);
 
-const formatUnknownFlagsError = (command: "openai" | "gemini", flags: string[]) =>
-  `Unknown flag(s) for ${command}: ${flags.map((flag) => `--${flag}`).join(", ")}`;
+function levenshteinDistance(a: string, b: string): number {
+  const dp: number[][] = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
 
-const uniqueInOrder = (values: string[]) => [...new Set(values)];
+  for (let i = 0; i <= a.length; i += 1) dp[i]![0] = i;
+  for (let j = 0; j <= b.length; j += 1) dp[0]![j] = j;
 
-const parseInputImages = (input: string[] | undefined, inputs: string[] | undefined) => {
-  const all = [...(input ?? []), ...(inputs ?? [])];
-  return all.length > 0 ? all : undefined;
-};
-
-class OpenAICommand extends Command {
-  static override paths = [["openai"]];
-
-  prompt = Option.String("--prompt", { required: false });
-  output = Option.String("--output", { required: false });
-  input = Option.Array("--input", [], { arity: 1 });
-  inputs = Option.Array("--inputs", [], { arity: 1 });
-  model = Option.String("--model", { required: false });
-  size = Option.String("--size", { required: false });
-  quality = Option.String("--quality", { required: false });
-  background = Option.String("--background", { required: false });
-
-  override async execute() {
-    return 0;
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i]![j] = Math.min(
+        dp[i - 1]![j]! + 1,
+        dp[i]![j - 1]! + 1,
+        dp[i - 1]![j - 1]! + cost
+      );
+    }
   }
+
+  return dp[a.length]![b.length]!;
 }
 
-class GeminiCommand extends Command {
-  static override paths = [["gemini"]];
+function suggestFlag(flag: string, knownFlags: readonly string[]): string | undefined {
+  let best: { flag: string; distance: number } | undefined;
 
-  prompt = Option.String("--prompt", { required: false });
-  output = Option.String("--output", { required: false });
-  input = Option.Array("--input", [], { arity: 1 });
-  inputs = Option.Array("--inputs", [], { arity: 1 });
-  model = Option.String("--model", { required: false });
-  aspectRatio = Option.String("--aspect-ratio", { required: false });
-  imageSize = Option.String("--image-size", { required: false });
-
-  override async execute() {
-    return 0;
+  for (const knownFlag of knownFlags) {
+    const distance = levenshteinDistance(flag, knownFlag);
+    if (!best || distance < best.distance) {
+      best = { flag: knownFlag, distance };
+    }
   }
+
+  if (!best || best.distance > 3) return undefined;
+  return best.flag;
 }
 
-function createCli() {
-  const cli = new Cli({
-    binaryName: "images-mcp",
-    binaryLabel: "images-mcp",
+function formatUnknownFlagsError(command: Provider, unknownFlags: string[], knownFlags: readonly string[]) {
+  const parts = unknownFlags.map((rawFlag) => {
+    const clean = rawFlag.replace(/^-+/, "");
+    const suggestion = suggestFlag(clean, knownFlags);
+    return suggestion ? `${rawFlag} (did you mean --${suggestion}?)` : rawFlag;
   });
 
-  cli.register(OpenAICommand);
-  cli.register(GeminiCommand);
-
-  return cli;
+  return `Unknown flag(s) for ${command}: ${parts.join(", ")}`;
 }
 
-function structuralErrorForArgs(args: string[]): string | undefined {
-  for (let i = 0; i < args.length; i += 1) {
-    const token = args[i];
-    if (!token) break;
-    if (token === "--help" || token === "-h") return undefined;
-    if (!token.startsWith("--")) return `Unexpected argument: ${token}`;
-
-    const key = token.slice(2);
-    const value = args[i + 1];
-    if (!value || value.startsWith("--")) return `Missing value for --${key}`;
-    i += 1;
+function splitLongFlag(token: string): { flag: string; inlineValue?: string } {
+  const equalsIndex = token.indexOf("=");
+  if (equalsIndex === -1) {
+    return { flag: token.slice(2) };
   }
+
+  return {
+    flag: token.slice(2, equalsIndex),
+    inlineValue: token.slice(equalsIndex + 1),
+  };
 }
 
-function findUnknownFlags(command: "openai" | "gemini", args: string[]): string[] {
-  const known = command === "openai"
-    ? new Set(["prompt", "output", "input", "inputs", "model", "size", "quality", "background"])
-    : new Set(["prompt", "output", "input", "inputs", "model", "aspect-ratio", "image-size"]);
+function pushValue(state: ParseState, key: string, value: string) {
+  const existing = state.values.get(key);
+  if (existing) {
+    existing.push(value);
+    return;
+  }
+  state.values.set(key, [value]);
+}
 
+function parseInputValues(values: string[]): string[] {
+  return values
+    .flatMap((entry) => entry.split(","))
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function isLikelyAnotherFlag(token: string, knownFlags: Set<string>): boolean {
+  if (token === "--help" || token === "-h") return true;
+  if (token.startsWith("--")) {
+    const { flag } = splitLongFlag(token);
+    return knownFlags.has(flag);
+  }
+  return token.length === 2 && token.startsWith("-") && token in SHORT_ALIASES;
+}
+
+function parseCommandArgs(command: Provider, args: string[]): ParsedArgs | { state: ParseState } {
+  const knownFlagNames = knownFlagsFor(command);
+  const knownFlags = new Set(knownFlagNames);
+  const state: ParseState = { values: new Map(), positionals: [] };
   const unknownFlags: string[] = [];
+
   for (let i = 0; i < args.length; i += 1) {
     const token = args[i];
-    if (!token?.startsWith("--")) {
+    if (!token) continue;
+
+    if (token === "--help" || token === "-h") {
+      return { mode: "help" };
+    }
+
+    if (token === "--") {
+      state.positionals.push(...args.slice(i + 1));
+      break;
+    }
+
+    if (token.startsWith("--")) {
+      const { flag, inlineValue } = splitLongFlag(token);
+      if (!flag) {
+        return { mode: "help", message: `Unexpected argument: ${token}` };
+      }
+
+      if (!knownFlags.has(flag)) {
+        unknownFlags.push(`--${flag}`);
+        continue;
+      }
+
+      let value = inlineValue;
+      if (value === undefined) {
+        value = args[i + 1];
+        if (value === undefined || isLikelyAnotherFlag(value, knownFlags)) {
+          return { mode: "help", message: `Missing value for --${flag}` };
+        }
+        i += 1;
+      }
+
+      pushValue(state, flag, value);
       continue;
     }
 
-    const key = token.slice(2);
-    if (!known.has(key)) {
-      unknownFlags.push(key);
+    if (token.startsWith("-") && token.length === 2) {
+      const alias = SHORT_ALIASES[token];
+      if (!alias) {
+        unknownFlags.push(token);
+        continue;
+      }
+
+      if (alias === "help") {
+        return { mode: "help" };
+      }
+
+      if (!knownFlags.has(alias)) {
+        unknownFlags.push(token);
+        continue;
+      }
+
+      const value = args[i + 1];
+      if (value === undefined || isLikelyAnotherFlag(value, knownFlags)) {
+        return { mode: "help", message: `Missing value for --${alias}` };
+      }
+      i += 1;
+      pushValue(state, alias, value);
+      continue;
     }
 
-    i += 1;
+    state.positionals.push(token);
   }
 
-  return uniqueInOrder(unknownFlags);
-}
-
-function parseCommand(command: "openai" | "gemini", args: string[]) {
-  const cli = createCli();
-
-  try {
-    const parsed = cli.process([command, ...args]);
-    if (parsed instanceof OpenAICommand || parsed instanceof GeminiCommand) {
-      return parsed;
-    }
-    return { mode: "help", message: `Unknown command: ${command}` } as const;
-  } catch (error) {
+  if (unknownFlags.length > 0) {
     return {
       mode: "help",
-      message: error instanceof Error ? error.message.split("\n")[0] : String(error),
-    } as const;
+      message: formatUnknownFlagsError(command, [...new Set(unknownFlags)], knownFlagNames),
+    };
   }
+
+  return { state };
 }
 
-function parseOpenAICommand(args: string[]) {
-  const parsed = parseCommand("openai", args);
-  if ("mode" in parsed) return parsed;
-  if (!(parsed instanceof OpenAICommand)) {
-    return { mode: "help", message: "Unknown command: openai" } as const;
-  }
-  return parsed;
+function lastValue(state: ParseState, key: string): string | undefined {
+  return state.values.get(key)?.at(-1);
 }
 
-function parseGeminiCommand(args: string[]) {
-  const parsed = parseCommand("gemini", args);
-  if ("mode" in parsed) return parsed;
-  if (!(parsed instanceof GeminiCommand)) {
-    return { mode: "help", message: "Unknown command: gemini" } as const;
+function toPrompt(state: ParseState): string | undefined {
+  const promptFromFlag = lastValue(state, "prompt");
+  if (promptFromFlag !== undefined) {
+    const trimmed = promptFromFlag.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
   }
-  return parsed;
+
+  const positionalPrompt = state.positionals.join(" ").trim();
+  return positionalPrompt.length > 0 ? positionalPrompt : undefined;
+}
+
+function formatSchemaError(messagePrefix: string, issue: { message: string }): string {
+  return `${messagePrefix}: ${issue.message || "Unknown error"}`;
+}
+
+function parseOpenAIArgs(state: ParseState): ParsedArgs {
+  const prompt = toPrompt(state);
+  const output_path = lastValue(state, "output")?.trim();
+  const rawInputImages = state.values.get("input") ?? [];
+  const parsedInputImages = parseInputValues(rawInputImages);
+  const input_images = parsedInputImages.length > 0 ? parsedInputImages : undefined;
+
+  if (!prompt || !output_path) {
+    return { mode: "help", message: "Missing required --prompt or --output" };
+  }
+
+  const model = lastValue(state, "model");
+  const size = lastValue(state, "size");
+  const quality = lastValue(state, "quality");
+  const background = lastValue(state, "background");
+
+  if (model !== undefined && !isAllowedEnumValue(model, openAIModelSchema.options)) {
+    return { mode: "help", message: formatEnumError("model", model, openAIModelSchema.options) };
+  }
+  if (size !== undefined && !isAllowedEnumValue(size, openAISizeSchema.options)) {
+    return { mode: "help", message: formatEnumError("size", size, openAISizeSchema.options) };
+  }
+  if (quality !== undefined && !isAllowedEnumValue(quality, openAIQualitySchema.options)) {
+    return { mode: "help", message: formatEnumError("quality", quality, openAIQualitySchema.options) };
+  }
+  if (background !== undefined && !isAllowedEnumValue(background, openAIBackgroundSchema.options)) {
+    return { mode: "help", message: formatEnumError("background", background, openAIBackgroundSchema.options) };
+  }
+
+  const validated = openAIParamsSchema.safeParse({
+    prompt,
+    output_path,
+    model,
+    input_images,
+    size,
+    quality,
+    background,
+  });
+
+  if (!validated.success) {
+    return {
+      mode: "help",
+      message: formatSchemaError("Invalid OpenAI parameters", validated.error.issues[0] ?? { message: "Unknown error" }),
+    };
+  }
+
+  return { mode: "openai", params: validated.data };
+}
+
+function parseGeminiArgs(state: ParseState): ParsedArgs {
+  const prompt = toPrompt(state);
+  const output_path = lastValue(state, "output")?.trim();
+  const rawInputImages = state.values.get("input") ?? [];
+  const parsedInputImages = parseInputValues(rawInputImages);
+  const input_images = parsedInputImages.length > 0 ? parsedInputImages : undefined;
+
+  if (!prompt || !output_path) {
+    return { mode: "help", message: "Missing required --prompt or --output" };
+  }
+
+  const model = lastValue(state, "model");
+  const aspectRatio = lastValue(state, "aspect-ratio");
+  const imageSize = lastValue(state, "image-size");
+
+  if (model !== undefined && !isAllowedEnumValue(model, geminiModelSchema.options)) {
+    return { mode: "help", message: formatEnumError("model", model, geminiModelSchema.options) };
+  }
+  if (aspectRatio !== undefined && !isAllowedEnumValue(aspectRatio, geminiAspectRatioSchema.options)) {
+    return { mode: "help", message: formatEnumError("aspect-ratio", aspectRatio, geminiAspectRatioSchema.options) };
+  }
+  if (imageSize !== undefined && !isAllowedEnumValue(imageSize, geminiImageSizeSchema.options)) {
+    return { mode: "help", message: formatEnumError("image-size", imageSize, geminiImageSizeSchema.options) };
+  }
+
+  const validated = geminiParamsSchema.safeParse({
+    prompt,
+    output_path,
+    model,
+    input_images,
+    aspect_ratio: aspectRatio,
+    image_size: imageSize,
+  });
+
+  if (!validated.success) {
+    return {
+      mode: "help",
+      message: formatSchemaError("Invalid Gemini parameters", validated.error.issues[0] ?? { message: "Unknown error" }),
+    };
+  }
+
+  return { mode: "gemini", params: validated.data };
 }
 
 export function parseArgs(argv: string[]): ParsedArgs {
@@ -196,105 +336,18 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return { mode: "help", message: `Unknown command: ${command}` };
   }
 
-  if (rest.includes("--help") || rest.includes("-h")) return { mode: "help" };
-
-  const structuralError = structuralErrorForArgs(rest);
-  if (structuralError) {
-    return { mode: "help", message: structuralError };
+  const parsed = parseCommandArgs(command, rest);
+  if ("mode" in parsed) {
+    return parsed;
   }
 
-  const unknownFlags = findUnknownFlags(command, rest);
-  if (unknownFlags.length > 0) {
-    return { mode: "help", message: formatUnknownFlagsError(command, unknownFlags) };
-  }
+  return command === "openai" ? parseOpenAIArgs(parsed.state) : parseGeminiArgs(parsed.state);
+}
 
-  if (command === "openai") {
-    const parsed = parseOpenAICommand(rest);
-    if ("mode" in parsed) return parsed;
-
-    const prompt = parsed.prompt;
-    const output_path = parsed.output;
-    const input_images = parseInputImages(parsed.input, parsed.inputs);
-    if (!prompt || !output_path) {
-      return { mode: "help", message: "Missing required --prompt or --output" };
-    }
-
-    const model = parsed.model ?? "gpt-image-1.5";
-    const size = parsed.size ?? "auto";
-    const quality = parsed.quality ?? "auto";
-    const background = parsed.background ?? "auto";
-
-    if (!isAllowedEnumValue(model, openAIModelSchema.options)) {
-      return { mode: "help", message: formatEnumError("model", model, openAIModelSchema.options) };
-    }
-    if (!isAllowedEnumValue(size, openAISizeSchema.options)) {
-      return { mode: "help", message: formatEnumError("size", size, openAISizeSchema.options) };
-    }
-    if (!isAllowedEnumValue(quality, openAIQualitySchema.options)) {
-      return { mode: "help", message: formatEnumError("quality", quality, openAIQualitySchema.options) };
-    }
-    if (!isAllowedEnumValue(background, openAIBackgroundSchema.options)) {
-      return { mode: "help", message: formatEnumError("background", background, openAIBackgroundSchema.options) };
-    }
-
-    const validated = openAIParamsSchema.safeParse({
-      prompt,
-      output_path,
-      model,
-      input_images,
-      size,
-      quality,
-      background,
-    });
-    if (!validated.success) {
-      return { mode: "help", message: `Invalid OpenAI parameters: ${validated.error.issues[0]?.message ?? "Unknown error"}` };
-    }
-
-    const params: OpenAIParams = {
-      ...validated.data,
-    };
-    return { mode: "openai", params };
-  }
-
-  const parsed = parseGeminiCommand(rest);
-  if ("mode" in parsed) return parsed;
-
-  const prompt = parsed.prompt;
-  const output_path = parsed.output;
-  const input_images = parseInputImages(parsed.input, parsed.inputs);
-  if (!prompt || !output_path) {
-    return { mode: "help", message: "Missing required --prompt or --output" };
-  }
-
-  const model = parsed.model ?? "gemini-3-pro-image-preview";
-  const aspectRatio = parsed.aspectRatio;
-  const imageSize = parsed.imageSize;
-  if (!isAllowedEnumValue(model, geminiModelSchema.options)) {
-    return { mode: "help", message: formatEnumError("model", model, geminiModelSchema.options) };
-  }
-  if (aspectRatio && !isAllowedEnumValue(aspectRatio, geminiAspectRatioSchema.options)) {
-    return { mode: "help", message: formatEnumError("aspect-ratio", aspectRatio, geminiAspectRatioSchema.options) };
-  }
-  if (imageSize && !isAllowedEnumValue(imageSize, geminiImageSizeSchema.options)) {
-    return { mode: "help", message: formatEnumError("image-size", imageSize, geminiImageSizeSchema.options) };
-  }
-
-  const validated = geminiParamsSchema.safeParse({
-    prompt,
-    output_path,
-    model,
-    input_images,
-    aspect_ratio: aspectRatio,
-    image_size: imageSize,
-  });
-  if (!validated.success) {
-    return { mode: "help", message: `Invalid Gemini parameters: ${validated.error.issues[0]?.message ?? "Unknown error"}` };
-  }
-
-  const params: GeminiParams = {
-    ...validated.data,
-  };
-  return { mode: "gemini", params };
+function hasPromptArg(argv: string[]): boolean {
+  const promptLong = commonFlags.find((flag) => flag.name === "prompt");
+  const promptShort = promptLong?.short;
+  return argv.some((token) => token === "--prompt" || token.startsWith("--prompt=") || token === promptShort);
 }
 
 async function run() {
@@ -302,10 +355,10 @@ async function run() {
   let parsed = parseArgs(argv);
 
   const isMissingPromptOrOutput = parsed.mode === "help" && parsed.message === "Missing required --prompt or --output";
-  const hasPromptFlag = argv.includes("--prompt");
+  const promptPassedInArgs = hasPromptArg(argv);
   const stdinIsTTY = tty.isatty(0);
 
-  if (isMissingPromptOrOutput && !hasPromptFlag && !stdinIsTTY) {
+  if (isMissingPromptOrOutput && !promptPassedInArgs && !stdinIsTTY) {
     const promptFromStdin = (await Bun.stdin.text()).trim();
     if (promptFromStdin) {
       const command = argv[0];

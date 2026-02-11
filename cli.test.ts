@@ -17,13 +17,7 @@ describe("parseArgs validation", () => {
     }
   });
 
-  it("rejects positional arguments and missing values", () => {
-    const positional = parseArgs(["openai", "extra", "--prompt", "test", "--output", "out.png"]);
-    expect(positional.mode).toBe("help");
-    if (positional.mode === "help") {
-      expect(positional.message).toBe("Unexpected argument: extra");
-    }
-
+  it("rejects missing values", () => {
     const missingValue = parseArgs(["openai", "--prompt", "--output", "out.png"]);
     expect(missingValue.mode).toBe("help");
     if (missingValue.mode === "help") {
@@ -39,11 +33,12 @@ describe("parseArgs validation", () => {
     }
   });
 
-  it("rejects unknown flags for openai", () => {
-    const parsed = parseArgs(["openai", "--prompt", "test", "--output", "out.png", "--foo", "bar"]);
+  it("rejects unknown flags for openai with suggestions", () => {
+    const parsed = parseArgs(["openai", "--prompt", "test", "--output", "out.png", "--qulity", "high"]);
     expect(parsed.mode).toBe("help");
     if (parsed.mode === "help") {
-      expect(parsed.message).toContain("Unknown flag(s) for openai: --foo");
+      expect(parsed.message).toContain("Unknown flag(s) for openai: --qulity");
+      expect(parsed.message).toContain("did you mean --quality?");
     }
   });
 
@@ -64,11 +59,49 @@ describe("parseArgs validation", () => {
     }
   });
 
-  it("keeps backward compatibility for --inputs alias", () => {
-    const parsed = parseArgs(["openai", "--prompt", "test", "--output", "out.png", "--inputs", "img.png"]);
+  it("accepts --flag=value style", () => {
+    const parsed = parseArgs(["openai", "--prompt=test", "--output=out.webp", "--quality=high"]);
     expect(parsed.mode).toBe("openai");
     if (parsed.mode === "openai") {
-      expect(parsed.params.input_images).toEqual(["img.png"]);
+      expect(parsed.params.prompt).toBe("test");
+      expect(parsed.params.output_path).toBe("out.webp");
+      expect(parsed.params.quality).toBe("high");
+    }
+  });
+
+  it("accepts short aliases", () => {
+    const parsed = parseArgs(["gemini", "-p", "test", "-o", "out.png", "-i", "a.png"]);
+    expect(parsed.mode).toBe("gemini");
+    if (parsed.mode === "gemini") {
+      expect(parsed.params.prompt).toBe("test");
+      expect(parsed.params.output_path).toBe("out.png");
+      expect(parsed.params.input_images).toEqual(["a.png"]);
+    }
+  });
+
+  it("accepts positional prompt fallback", () => {
+    const parsed = parseArgs(["openai", "--output", "out.webp", "A", "cat", "in", "Tokyo"]);
+    expect(parsed.mode).toBe("openai");
+    if (parsed.mode === "openai") {
+      expect(parsed.params.prompt).toBe("A cat in Tokyo");
+    }
+  });
+
+  it("supports comma-separated and repeated input flags", () => {
+    const parsed = parseArgs([
+      "openai",
+      "--prompt",
+      "test",
+      "--output",
+      "out.webp",
+      "--input",
+      "a.png,b.png",
+      "--input",
+      "c.png",
+    ]);
+    expect(parsed.mode).toBe("openai");
+    if (parsed.mode === "openai") {
+      expect(parsed.params.input_images).toEqual(["a.png", "b.png", "c.png"]);
     }
   });
 
@@ -126,7 +159,7 @@ describe("cli executable behavior", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("images-mcp (CLI)");
     expect(result.stdout).toContain("images-mcp openai  [args]");
-    expect(result.stdout).toContain("--image-size    1K | 2K | 4K");
+    expect(result.stdout).toContain("--prompt, -p");
     expect(result.stderr).toBe("");
   });
 
@@ -149,7 +182,7 @@ describe("cli executable behavior", () => {
     expect(gemini.stderr).toContain("Allowed extensions: .png");
   });
 
-  it("reads prompt from stdin when --prompt is missing", () => {
+  it("reads prompt from stdin when prompt is missing", () => {
     const result = runCli(["openai", "--output", "out.gif"], "  prompt from stdin  \n");
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Error: Unsupported output extension for openai: .gif");
@@ -164,6 +197,13 @@ describe("cli executable behavior", () => {
 
   it("prioritizes --prompt over stdin", () => {
     const result = runCli(["openai", "--prompt", "from-flag", "--output", "out.gif"], "from-stdin");
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Error: Unsupported output extension for openai: .gif");
+    expect(result.stderr).not.toContain("Missing required --prompt or --output");
+  });
+
+  it("accepts positional prompt from executable path", () => {
+    const result = runCli(["openai", "--output", "out.gif", "prompt", "from", "positionals"]);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Error: Unsupported output extension for openai: .gif");
     expect(result.stderr).not.toContain("Missing required --prompt or --output");

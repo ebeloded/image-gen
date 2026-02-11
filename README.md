@@ -56,11 +56,17 @@ Common flags (both commands):
 
 | Flag | Required | Default | Notes |
 |---|---|---|---|
-| `--prompt <text>` | yes* | - | Prompt or edit instructions (`*` can be read from stdin when `--prompt` is omitted) |
-| `--output <path>` | yes | - | Output file path |
-| `--input <path>` | no | - | Repeatable input image path |
-| `--inputs <path>` | no | - | Backward-compatible alias of `--input` (accepted, not shown in built-in help text) |
+| `--prompt <text>`, `-p <text>` | yes* | - | Prompt or edit instructions (`*` can be read from stdin or positional args when `--prompt`/`-p` is omitted) |
+| `--output <path>`, `-o <path>` | yes | - | Output file path |
+| `--input <path>`, `-i <path>` | no | - | Repeatable input image path (`--input=a.png,b.png` also supported) |
 | `--help`, `-h` | no | - | Print usage |
+
+Permissive CLI input forms:
+
+- `--flag value`
+- `--flag=value`
+- short aliases (`-p`, `-o`, `-i`)
+- positional prompt fallback when `--prompt`/`-p` is omitted
 
 OpenAI flags (`images-mcp openai`):
 

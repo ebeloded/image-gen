@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import fs from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
@@ -6,6 +7,7 @@ import {
   generateGeminiImage,
   generateOpenAIImage,
 } from "./core.ts";
+import { providerSpecs } from "./metadata.ts";
 import { geminiInputShape, geminiParamsSchema, openAIInputShape, openAIParamsSchema } from "./schemas.ts";
 
 const textContent = (text: string) => ({ content: [{ type: "text" as const, text }] });
@@ -13,67 +15,82 @@ const errorResponse = (message: string) => textContent(`Error: ${message}`);
 const successResponse = (data: object) => textContent(JSON.stringify(data, null, 2));
 const formatValidationError = (error: z.ZodError) =>
   error.issues.map((issue) => `${issue.path.join(".") || "input"}: ${issue.message}`).join("; ");
+const packageVersion = (() => {
+  try {
+    const raw = fs.readFileSync(new URL("./package.json", import.meta.url), "utf8");
+    const parsed = JSON.parse(raw) as { version?: string };
+    return parsed.version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
+
+type ParamsShape = Record<string, unknown>;
+type SafeParseResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: z.ZodError };
+
+function registerImageTool<TParams extends ParamsShape, TResult extends object>(
+  server: McpServer,
+  config: {
+    name: string;
+    title: string;
+    description: string;
+    inputSchema: any;
+    parse: (input: ParamsShape) => SafeParseResult<TParams>;
+    invalidPrefix: string;
+    run: (params: TParams) => Promise<{ ok: true; data: TResult } | { ok: false; error: string }>;
+  }
+) {
+  server.registerTool(
+    config.name,
+    {
+      title: config.title,
+      description: config.description,
+      inputSchema: config.inputSchema,
+    },
+    async (input: any) => {
+      try {
+        const parsed = config.parse(input as ParamsShape);
+        if (!parsed.success) {
+          return errorResponse(`${config.invalidPrefix}: ${formatValidationError(parsed.error)}`);
+        }
+
+        const result = await config.run(parsed.data);
+        if (!result.ok) return errorResponse(result.error);
+        return successResponse(result.data);
+      } catch (error) {
+        return errorResponse(error instanceof Error ? error.message : String(error));
+      }
+    }
+  );
+}
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "images-mcp",
-    version: "1.0.0",
+    version: packageVersion,
   });
 
-  server.registerTool(
-    "openai_generate_image",
-    {
-      title: "OpenAI Image Generator",
-      description: "Generate an image using OpenAI and save it to a file. Can accept input images for editing.",
-      inputSchema: openAIInputShape,
-    },
-    async ({ prompt, output_path, model, input_images, size, quality, background }) => {
-      try {
-        const parsed = openAIParamsSchema.safeParse({
-          prompt,
-          output_path,
-          model,
-          input_images,
-          size,
-          quality,
-          background,
-        });
-        if (!parsed.success) return errorResponse(`Invalid OpenAI parameters: ${formatValidationError(parsed.error)}`);
-        const result = await generateOpenAIImage(parsed.data);
-        if (!result.ok) return errorResponse(result.error);
-        return successResponse(result.data);
-      } catch (error) {
-        return errorResponse(error instanceof Error ? error.message : String(error));
-      }
-    }
-  );
+  registerImageTool(server, {
+    name: providerSpecs.openai.toolName,
+    title: providerSpecs.openai.toolTitle,
+    description: providerSpecs.openai.toolDescription,
+    inputSchema: openAIInputShape,
+    parse: (input) => openAIParamsSchema.safeParse(input),
+    invalidPrefix: "Invalid OpenAI parameters",
+    run: generateOpenAIImage,
+  });
 
-  server.registerTool(
-    "gemini_generate_image",
-    {
-      title: "Gemini Image Generator",
-      description: "Generate or edit an image using Google Gemini and save it to a file. Can accept input images for editing.",
-      inputSchema: geminiInputShape,
-    },
-    async ({ prompt, output_path, model, input_images, aspect_ratio, image_size }) => {
-      try {
-        const parsed = geminiParamsSchema.safeParse({
-          prompt,
-          output_path,
-          model,
-          input_images,
-          aspect_ratio,
-          image_size,
-        });
-        if (!parsed.success) return errorResponse(`Invalid Gemini parameters: ${formatValidationError(parsed.error)}`);
-        const result = await generateGeminiImage(parsed.data);
-        if (!result.ok) return errorResponse(result.error);
-        return successResponse(result.data);
-      } catch (error) {
-        return errorResponse(error instanceof Error ? error.message : String(error));
-      }
-    }
-  );
+  registerImageTool(server, {
+    name: providerSpecs.gemini.toolName,
+    title: providerSpecs.gemini.toolTitle,
+    description: providerSpecs.gemini.toolDescription,
+    inputSchema: geminiInputShape,
+    parse: (input) => geminiParamsSchema.safeParse(input),
+    invalidPrefix: "Invalid Gemini parameters",
+    run: generateGeminiImage,
+  });
 
   server.registerPrompt(
     "create-image",

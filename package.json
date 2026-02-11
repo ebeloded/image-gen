@@ -1,6 +1,6 @@
 {
   "name": "images-mcp",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "description": "MCP server for AI image generation using OpenAI and Google Gemini",
   "type": "module",
   "main": "mcp.ts",
@@ -10,6 +10,10 @@
   "files": [
     "cli.ts",
     "core.ts",
+    "core-utils.ts",
+    "openai.ts",
+    "gemini.ts",
+    "metadata.ts",
     "mcp.ts",
     "schemas.ts"
   ],
