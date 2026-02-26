@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { getGeminiApiKey } from "./config.ts";
 import type { GeminiParams } from "./schemas.ts";
 import {
   type GeminiResult,
@@ -29,9 +30,9 @@ export function setGoogleClientForTests(client: GoogleClient | null) {
 
 function getGoogle(): GoogleClient {
   if (!googleClient) {
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = getGeminiApiKey();
     if (!apiKey) {
-      throw new Error("Missing GEMINI_API_KEY or GOOGLE_API_KEY environment variable");
+      throw new Error("Missing gemini_api_key in config or GEMINI_API_KEY / GOOGLE_API_KEY environment variable");
     }
     googleClient = new GoogleGenAI({ apiKey }) as GoogleClient;
   }

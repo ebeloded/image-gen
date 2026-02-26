@@ -2,6 +2,9 @@ import {
   geminiAspectRatioSchema,
   geminiImageSizeSchema,
   geminiModelSchema,
+  grokAspectRatioSchema,
+  grokModelSchema,
+  grokResolutionSchema,
   openAIBackgroundSchema,
   openAIModelSchema,
   openAIQualitySchema,
@@ -10,7 +13,7 @@ import {
   toolMetadata,
 } from "./schemas.ts";
 
-export type Provider = "openai" | "gemini";
+export type Provider = "openai" | "gemini" | "grok";
 
 type FlagSpec = {
   name: string;
@@ -54,6 +57,32 @@ export const commonFlags: readonly FlagSpec[] = [
 ] as const;
 
 export const providerSpecs: Record<Provider, ProviderSpec> = {
+  grok: {
+    command: "grok",
+    summary: "Generate/edit via xAI Grok",
+    toolName: toolMetadata.grok.name,
+    toolTitle: toolMetadata.grok.title,
+    toolDescription: toolMetadata.grok.description,
+    outputExtensions: [".jpg", ".jpeg"],
+    flags: [
+      {
+        name: "model",
+        description: "Model",
+        defaultValue: "grok-2-image",
+        allowedValues: grokModelSchema.options,
+      },
+      {
+        name: "aspect-ratio",
+        description: "Aspect ratio",
+        allowedValues: grokAspectRatioSchema.options,
+      },
+      {
+        name: "resolution",
+        description: "Image resolution",
+        allowedValues: grokResolutionSchema.options,
+      },
+    ],
+  },
   openai: {
     command: "openai",
     summary: "Generate/edit via OpenAI",
@@ -116,7 +145,7 @@ export const providerSpecs: Record<Provider, ProviderSpec> = {
   },
 } as const;
 
-export const providerOrder: readonly Provider[] = ["openai", "gemini"] as const;
+export const providerOrder: readonly Provider[] = ["openai", "gemini", "grok"] as const;
 
 export function knownFlagsFor(provider: Provider): readonly string[] {
   return [...commonFlags.map((flag) => flag.name), ...providerSpecs[provider].flags.map((flag) => flag.name)] as const;
@@ -153,14 +182,14 @@ function usageLineForFlag(flag: FlagSpec): string {
 
 export function buildCliUsageText(): string {
   const lines: string[] = [
-    "images-mcp (CLI)",
+    "image-gen (CLI)",
     "",
     "Usage:",
   ];
 
   for (const provider of providerOrder) {
     const spec = providerSpecs[provider];
-    lines.push(`  images-mcp ${provider}  [args]  ${spec.summary}`);
+    lines.push(`  image-gen ${provider}  [args]  ${spec.summary}`);
   }
 
   lines.push("", "Common args:");

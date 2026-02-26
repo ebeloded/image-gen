@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { getOpenAIApiKey } from "./config.ts";
 import type { OpenAIParams } from "./schemas.ts";
 import {
   type GenerateResult,
@@ -24,7 +25,7 @@ export function setOpenAIClientForTests(client: OpenAIClient | null) {
 
 function getOpenAI(): OpenAIClient {
   if (!openaiClient) {
-    openaiClient = new OpenAI() as OpenAIClient;
+    openaiClient = new OpenAI({ apiKey: getOpenAIApiKey() }) as OpenAIClient;
   }
   return openaiClient;
 }

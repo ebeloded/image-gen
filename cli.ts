@@ -2,6 +2,7 @@
 import tty from "node:tty";
 import {
   generateGeminiImage,
+  generateGrokImage,
   generateOpenAIImage,
 } from "./core.ts";
 import {
@@ -17,18 +18,24 @@ import {
   geminiImageSizeSchema,
   geminiModelSchema,
   geminiParamsSchema,
+  grokAspectRatioSchema,
+  grokModelSchema,
+  grokParamsSchema,
+  grokResolutionSchema,
   openAIBackgroundSchema,
   openAIModelSchema,
   openAIParamsSchema,
   openAIQualitySchema,
   openAISizeSchema,
   type GeminiParams,
+  type GrokParams,
   type OpenAIParams,
 } from "./schemas.ts";
 
 export type ParsedArgs =
   | { mode: "openai"; params: OpenAIParams }
   | { mode: "gemini"; params: GeminiParams }
+  | { mode: "grok"; params: GrokParams }
   | { mode: "help"; message?: string };
 
 type ParseState = {
@@ -324,6 +331,50 @@ function parseGeminiArgs(state: ParseState): ParsedArgs {
   return { mode: "gemini", params: validated.data };
 }
 
+function parseGrokArgs(state: ParseState): ParsedArgs {
+  const prompt = toPrompt(state);
+  const output_path = lastValue(state, "output")?.trim();
+  const rawInputImages = state.values.get("input") ?? [];
+  const parsedInputImages = parseInputValues(rawInputImages);
+  const input_images = parsedInputImages.length > 0 ? parsedInputImages : undefined;
+
+  if (!prompt || !output_path) {
+    return { mode: "help", message: "Missing required --prompt or --output" };
+  }
+
+  const model = lastValue(state, "model");
+  const aspectRatio = lastValue(state, "aspect-ratio");
+  const resolution = lastValue(state, "resolution");
+
+  if (model !== undefined && !isAllowedEnumValue(model, grokModelSchema.options)) {
+    return { mode: "help", message: formatEnumError("model", model, grokModelSchema.options) };
+  }
+  if (aspectRatio !== undefined && !isAllowedEnumValue(aspectRatio, grokAspectRatioSchema.options)) {
+    return { mode: "help", message: formatEnumError("aspect-ratio", aspectRatio, grokAspectRatioSchema.options) };
+  }
+  if (resolution !== undefined && !isAllowedEnumValue(resolution, grokResolutionSchema.options)) {
+    return { mode: "help", message: formatEnumError("resolution", resolution, grokResolutionSchema.options) };
+  }
+
+  const validated = grokParamsSchema.safeParse({
+    prompt,
+    output_path,
+    model,
+    input_images,
+    aspect_ratio: aspectRatio,
+    resolution,
+  });
+
+  if (!validated.success) {
+    return {
+      mode: "help",
+      message: formatSchemaError("Invalid Grok parameters", validated.error.issues[0] ?? { message: "Unknown error" }),
+    };
+  }
+
+  return { mode: "grok", params: validated.data };
+}
+
 export function parseArgs(argv: string[]): ParsedArgs {
   if (argv.length === 0) return { mode: "help" };
 
@@ -332,7 +383,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   if (!command) return { mode: "help" };
   if (command === "--help" || command === "-h") return { mode: "help" };
-  if (command !== "openai" && command !== "gemini") {
+  if (command !== "openai" && command !== "gemini" && command !== "grok") {
     return { mode: "help", message: `Unknown command: ${command}` };
   }
 
@@ -341,7 +392,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
     return parsed;
   }
 
-  return command === "openai" ? parseOpenAIArgs(parsed.state) : parseGeminiArgs(parsed.state);
+  return command === "openai"
+    ? parseOpenAIArgs(parsed.state)
+    : command === "gemini"
+    ? parseGeminiArgs(parsed.state)
+    : parseGrokArgs(parsed.state);
 }
 
 function hasPromptArg(argv: string[]): boolean {
@@ -362,7 +417,7 @@ async function run() {
     const promptFromStdin = (await Bun.stdin.text()).trim();
     if (promptFromStdin) {
       const command = argv[0];
-      if (command === "openai" || command === "gemini") {
+      if (command === "openai" || command === "gemini" || command === "grok") {
         parsed = parseArgs([command, "--prompt", promptFromStdin, ...argv.slice(1)]);
       }
     }
@@ -377,7 +432,9 @@ async function run() {
     const result =
       parsed.mode === "openai"
         ? await generateOpenAIImage(parsed.params)
-        : await generateGeminiImage(parsed.params);
+        : parsed.mode === "gemini"
+        ? await generateGeminiImage(parsed.params)
+        : await generateGrokImage(parsed.params);
 
     if (!result.ok) {
       console.error(`Error: ${result.error}`);

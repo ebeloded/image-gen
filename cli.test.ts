@@ -157,8 +157,8 @@ describe("cli executable behavior", () => {
   it("prints usage and exits 0 for help", () => {
     const result = runCli(["--help"]);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("images-mcp (CLI)");
-    expect(result.stdout).toContain("images-mcp openai  [args]");
+    expect(result.stdout).toContain("image-gen (CLI)");
+    expect(result.stdout).toContain("image-gen openai  [args]");
     expect(result.stdout).toContain("--prompt, -p");
     expect(result.stderr).toBe("");
   });
@@ -167,7 +167,7 @@ describe("cli executable behavior", () => {
     const result = runCli(["gemini", "--prompt", "test", "--output", "out.png", "--wat", "nope"]);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Unknown flag(s) for gemini: --wat");
-    expect(result.stderr).toContain("images-mcp (CLI)");
+    expect(result.stderr).toContain("image-gen (CLI)");
   });
 
   it("enforces provider-specific output extensions", () => {

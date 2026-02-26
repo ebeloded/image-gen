@@ -38,7 +38,7 @@ describe("mcp tools contract", () => {
     const server = createMcpServer();
     await server.connect(serverTransport);
 
-    const client = new Client({ name: "images-mcp-test-client", version: "1.0.0" });
+    const client = new Client({ name: "image-gen-test-client", version: "1.0.0" });
     await client.connect(clientTransport);
 
     return { client, clientTransport, serverTransport };

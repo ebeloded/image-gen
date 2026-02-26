@@ -1,11 +1,11 @@
 {
-  "name": "images-mcp",
+  "name": "image-gen",
   "version": "1.2.3",
   "description": "MCP server for AI image generation using OpenAI and Google Gemini",
   "type": "module",
   "main": "mcp.ts",
   "bin": {
-    "images-mcp": "cli.ts"
+    "image-gen": "cli.ts"
   },
   "files": [
     "cli.ts",
@@ -37,12 +37,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ebeloded/images-mcp.git"
+    "url": "git+https://github.com/ebeloded/image-gen.git"
   },
   "bugs": {
-    "url": "https://github.com/ebeloded/images-mcp/issues"
+    "url": "https://github.com/ebeloded/image-gen/issues"
   },
-  "homepage": "https://github.com/ebeloded/images-mcp#readme",
+  "homepage": "https://github.com/ebeloded/image-gen#readme",
   "engines": {
     "bun": ">=1.0.0"
   },

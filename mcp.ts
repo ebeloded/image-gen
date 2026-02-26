@@ -5,10 +5,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import {
   generateGeminiImage,
+  generateGrokImage,
   generateOpenAIImage,
 } from "./core.ts";
 import { providerSpecs } from "./metadata.ts";
-import { geminiInputShape, geminiParamsSchema, openAIInputShape, openAIParamsSchema } from "./schemas.ts";
+import { geminiInputShape, geminiParamsSchema, grokInputShape, grokParamsSchema, openAIInputShape, openAIParamsSchema } from "./schemas.ts";
 
 const textContent = (text: string) => ({ content: [{ type: "text" as const, text }] });
 const errorResponse = (message: string) => textContent(`Error: ${message}`);
@@ -68,7 +69,7 @@ function registerImageTool<TParams extends ParamsShape, TResult extends object>(
 
 export function createMcpServer(): McpServer {
   const server = new McpServer({
-    name: "images-mcp",
+    name: "image-gen",
     version: packageVersion,
   });
 
@@ -90,6 +91,16 @@ export function createMcpServer(): McpServer {
     parse: (input) => geminiParamsSchema.safeParse(input),
     invalidPrefix: "Invalid Gemini parameters",
     run: generateGeminiImage,
+  });
+
+  registerImageTool(server, {
+    name: providerSpecs.grok.toolName,
+    title: providerSpecs.grok.toolTitle,
+    description: providerSpecs.grok.toolDescription,
+    inputSchema: grokInputShape,
+    parse: (input) => grokParamsSchema.safeParse(input),
+    invalidPrefix: "Invalid Grok parameters",
+    run: generateGrokImage,
   });
 
   server.registerPrompt(

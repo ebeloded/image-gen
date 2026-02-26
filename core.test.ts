@@ -9,7 +9,7 @@ import {
 } from "./core.ts";
 
 function tempPath(name: string): string {
-  return `/tmp/images-mcp-${Date.now()}-${Math.random().toString(16).slice(2)}-${name}`;
+  return `/tmp/image-gen-${Date.now()}-${Math.random().toString(16).slice(2)}-${name}`;
 }
 
 describe("core mime and output format handling", () => {

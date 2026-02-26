@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { GeminiParams, OpenAIParams } from "./schemas.ts";
+import type { GeminiParams, GrokParams, OpenAIParams } from "./schemas.ts";
 
 const MIME_TYPES: Record<string, string> = {
   ".png": "image/png",
@@ -18,6 +18,10 @@ const OUTPUT_FORMATS = {
   },
   gemini: {
     ".png": { format: "png", mimeType: "image/png" },
+  },
+  grok: {
+    ".jpg": { format: "jpeg", mimeType: "image/jpeg" },
+    ".jpeg": { format: "jpeg", mimeType: "image/jpeg" },
   },
 } as const;
 
@@ -42,6 +46,16 @@ export type GeminiResult = {
   model: GeminiParams["model"];
   aspect_ratio?: GeminiParams["aspect_ratio"];
   image_size?: GeminiParams["image_size"];
+  input_images_count: number;
+};
+
+export type GrokResult = {
+  success: true;
+  path: string;
+  bytes: number;
+  model: GrokParams["model"];
+  aspect_ratio?: GrokParams["aspect_ratio"];
+  resolution?: GrokParams["resolution"];
   input_images_count: number;
 };
 
