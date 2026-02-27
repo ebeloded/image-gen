@@ -19,7 +19,36 @@ Set API keys (use one or both providers):
 ```bash
 export OPENAI_API_KEY="..."
 export GEMINI_API_KEY="..."   # or GOOGLE_API_KEY
+export XAI_API_KEY="..."
 ```
+
+### API Key Management
+
+Store keys persistently in `~/.config/image-gen/config.json`:
+
+```bash
+image-gen keys set openai sk-proj-...
+image-gen keys set gemini AIza...
+image-gen keys set grok xai-...
+```
+
+Or pipe the key to avoid it appearing in shell history:
+
+```bash
+echo "sk-proj-..." | image-gen keys set openai
+```
+
+View and manage keys:
+
+```bash
+image-gen keys           # show all key statuses (masked)
+image-gen keys get openai  # print raw key value
+image-gen keys delete openai  # remove a key
+```
+
+Environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY`/`GOOGLE_API_KEY`, `XAI_API_KEY`) still work alongside the config file. Both are shown in `image-gen keys list`.
+
+A local `.image-gen.json` in the working directory takes precedence over the user config (for project-level overrides).
 
 Run directly from this repo:
 
@@ -47,6 +76,8 @@ images-mcp --help
 ```bash
 images-mcp openai [flags]
 images-mcp gemini [flags]
+images-mcp grok [flags]
+images-mcp keys [subcommand]
 images-mcp --help
 ```
 
@@ -92,6 +123,18 @@ Gemini flags (`images-mcp gemini`):
 Gemini output file extensions:
 
 - `.png`
+
+Grok flags (`images-mcp grok`):
+
+| Flag | Required | Default | Allowed values |
+|---|---|---|---|
+| `--model <value>` | no | `grok-2-image` | `grok-2-image` |
+| `--aspect-ratio <value>` | no | unset | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9` |
+| `--resolution <value>` | no | unset | `HD`, `FHD` |
+
+Grok output file extensions:
+
+- `.jpg`, `.jpeg`
 
 ### CLI Examples
 
@@ -194,11 +237,26 @@ Gemini command without both `GEMINI_API_KEY` and `GOOGLE_API_KEY` fails with:
 Error: Missing GEMINI_API_KEY or GOOGLE_API_KEY environment variable
 ```
 
-Fix:
+Grok command without `XAI_API_KEY` fails with:
+
+```text
+Error: Missing XAI_API_KEY environment variable
+```
+
+Fix -- set keys via config (preferred) or environment variables:
+
+```bash
+image-gen keys set openai sk-proj-...
+image-gen keys set gemini AIza...
+image-gen keys set grok xai-...
+```
+
+Or via environment:
 
 ```bash
 export OPENAI_API_KEY="..."
 export GEMINI_API_KEY="..."   # or GOOGLE_API_KEY
+export XAI_API_KEY="..."
 ```
 
 ### Invalid or Unsupported Flags

@@ -1,3 +1,5 @@
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   geminiAspectRatioSchema,
   geminiImageSizeSchema,
@@ -212,6 +214,17 @@ export function buildCliUsageText(keyStatus?: Partial<Record<Provider, boolean>>
     "",
     "Permissive input styles:",
     "  --flag value, --flag=value, short aliases (-p/-o/-i), and positional prompt fallback"
+  );
+
+  lines.push(
+    "",
+    "Key management:",
+    "  image-gen keys [list]                Show all API key statuses",
+    "  image-gen keys set <provider> [key]  Set a key (reads stdin if key omitted)",
+    "  image-gen keys get <provider>        Print key value",
+    "  image-gen keys delete <provider>     Remove a key",
+    "  providers: openai, gemini, grok",
+    `  config: ${join(homedir(), ".config", "image-gen", "config.json")}`,
   );
 
   return `${lines.join("\n")}\n`;

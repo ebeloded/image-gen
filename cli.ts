@@ -6,6 +6,7 @@ import {
   generateGrokImage,
   generateOpenAIImage,
 } from "./core.ts";
+import { setKey, getKey, deleteKey, listKeys, configFilePath, type KeyProvider } from "./keys.ts";
 import {
   buildCliUsageText,
   commonFlags,
@@ -37,6 +38,7 @@ export type ParsedArgs =
   | { mode: "openai"; params: OpenAIParams }
   | { mode: "gemini"; params: GeminiParams }
   | { mode: "grok"; params: GrokParams }
+  | { mode: "keys"; action: "list" | "set" | "get" | "delete"; provider?: KeyProvider; value?: string }
   | { mode: "help"; message?: string };
 
 type ParseState = {
@@ -381,6 +383,39 @@ function parseGrokArgs(state: ParseState): ParsedArgs {
   return { mode: "grok", params: validated.data };
 }
 
+const VALID_KEY_PROVIDERS: KeyProvider[] = ["openai", "gemini", "grok"];
+
+function isKeyProvider(value: string): value is KeyProvider {
+  return VALID_KEY_PROVIDERS.includes(value as KeyProvider);
+}
+
+function parseKeysArgs(rest: string[]): ParsedArgs {
+  if (rest.length === 0 || rest[0] === "list") {
+    return { mode: "keys", action: "list" };
+  }
+
+  const subcommand = rest[0]!;
+  if (subcommand !== "set" && subcommand !== "get" && subcommand !== "delete") {
+    return { mode: "help", message: `Unknown keys subcommand: ${subcommand}. Use list, set, get, or delete` };
+  }
+
+  const provider = rest[1];
+  if (!provider) {
+    return { mode: "help", message: `Missing provider for 'keys ${subcommand}'. Allowed: openai, gemini, grok` };
+  }
+
+  if (!isKeyProvider(provider)) {
+    return { mode: "help", message: `Unknown provider: "${provider}". Allowed: openai, gemini, grok` };
+  }
+
+  if (subcommand === "set") {
+    const value = rest[2];
+    return { mode: "keys", action: "set", provider, value };
+  }
+
+  return { mode: "keys", action: subcommand, provider };
+}
+
 export function parseArgs(argv: string[]): ParsedArgs {
   if (argv.length === 0) return { mode: "help" };
 
@@ -389,9 +424,11 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   if (!command) return { mode: "help" };
   if (command === "--help" || command === "-h") return { mode: "help" };
-  if (command !== "openai" && command !== "gemini" && command !== "grok") {
+  if (command !== "openai" && command !== "gemini" && command !== "grok" && command !== "keys") {
     return { mode: "help", message: `Unknown command: ${command}` };
   }
+
+  if (command === "keys") return parseKeysArgs(rest);
 
   const parsed = parseCommandArgs(command, rest);
   if ("mode" in parsed) {
@@ -411,6 +448,49 @@ function hasPromptArg(argv: string[]): boolean {
   return argv.some((token) => token === "--prompt" || token.startsWith("--prompt=") || token === promptShort);
 }
 
+async function runKeysCommand(parsed: Extract<ParsedArgs, { mode: "keys" }>): Promise<void> {
+  if (parsed.action === "list") {
+    listKeys();
+    return;
+  }
+
+  if (parsed.action === "set") {
+    let value = parsed.value;
+    if (value === undefined) {
+      value = (await Bun.stdin.text()).trim();
+      if (!value) {
+        console.error("Error: no key provided (pass as argument or pipe via stdin)");
+        process.exit(1);
+      }
+    }
+    await setKey(parsed.provider!, value);
+    console.log(`${parsed.provider!} key saved to ${configFilePath()}`);
+    return;
+  }
+
+  if (parsed.action === "get") {
+    const value = getKey(parsed.provider!);
+    if (value !== undefined) {
+      console.log(value);
+    } else {
+      console.error(`No ${parsed.provider!} key found in config`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  if (parsed.action === "delete") {
+    const removed = await deleteKey(parsed.provider!);
+    if (removed) {
+      console.log(`${parsed.provider!} key removed from ${configFilePath()}`);
+    } else {
+      console.error(`No ${parsed.provider!} key found in config`);
+      process.exit(1);
+    }
+    return;
+  }
+}
+
 async function run() {
   const argv = process.argv.slice(2);
   let parsed = parseArgs(argv);
@@ -427,6 +507,11 @@ async function run() {
         parsed = parseArgs([command, "--prompt", promptFromStdin, ...argv.slice(1)]);
       }
     }
+  }
+
+  if (parsed.mode === "keys") {
+    await runKeysCommand(parsed);
+    return;
   }
 
   if (parsed.mode === "help") {

@@ -19,7 +19,7 @@ function tryReadConfigFile(path: string): ConfigFile | null {
 function loadConfig(): ConfigFile {
   return (
     tryReadConfigFile(join(process.cwd(), ".image-gen.json")) ??
-    tryReadConfigFile(join(homedir(), ".image-gen.json")) ??
+    tryReadConfigFile(join(homedir(), ".config", "image-gen", "config.json")) ??
     {}
   );
 }
