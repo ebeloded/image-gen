@@ -39,10 +39,10 @@ The prompt can also be passed as positional args or piped via stdin.
 
 | Flag             | Default         | Values                                |
 |------------------|-----------------|---------------------------------------|
-| `--model`        | gpt-image-1.5   | gpt-image-1.5                         |
-| `--size`         | auto            | auto, 1024x1024, 1536x1024, 1024x1536 |
+| `--model`        | gpt-image-2     | gpt-image-2, gpt-image-1.5            |
+| `--size`         | auto            | auto, 1024x1024, 1536x1024, 1024x1536, 2048x2048, 2048x1152, 3840x2160, 2160x3840 |
 | `--quality`      | auto            | auto, high, medium, low               |
-| `--background`   | auto            | auto, transparent, opaque             |
+| `--background`   | auto            | auto, transparent, opaque (transparent not supported on gpt-image-2) |
 
 ### Gemini
 

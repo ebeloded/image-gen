@@ -109,7 +109,7 @@ describe("parseArgs validation", () => {
     const parsed = parseArgs(["openai", "--prompt", "test", "--output", "out.webp"]);
     expect(parsed.mode).toBe("openai");
     if (parsed.mode === "openai") {
-      expect(parsed.params.model).toBe("gpt-image-1.5");
+      expect(parsed.params.model).toBe("gpt-image-2");
       expect(parsed.params.size).toBe("auto");
       expect(parsed.params.quality).toBe("auto");
       expect(parsed.params.background).toBe("auto");

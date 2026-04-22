@@ -6,26 +6,17 @@ export const sharedDescriptions = {
   inputImages: "Optional array of image file paths for editing/reference",
 } as const;
 
-export const toolMetadata = {
-  openai: {
-    name: "openai_generate_image",
-    title: "OpenAI Image Generator",
-    description: "Generate an image using OpenAI and save it to a file. Can accept input images for editing.",
-  },
-  gemini: {
-    name: "gemini_generate_image",
-    title: "Gemini Image Generator",
-    description: "Generate or edit an image using Google Gemini and save it to a file. Can accept input images for editing.",
-  },
-  grok: {
-    name: "grok_generate_image",
-    title: "Grok Image Generator",
-    description: "Generate or edit an image using xAI Grok (Aurora model) and save it to a file. Can accept input images for editing.",
-  },
-} as const;
-
-export const openAIModelSchema = z.enum(["gpt-image-1.5"]);
-export const openAISizeSchema = z.enum(["auto", "1024x1024", "1536x1024", "1024x1536"]);
+export const openAIModelSchema = z.enum(["gpt-image-2", "gpt-image-1.5"]);
+export const openAISizeSchema = z.enum([
+  "auto",
+  "1024x1024",
+  "1536x1024",
+  "1024x1536",
+  "2048x2048",
+  "2048x1152",
+  "3840x2160",
+  "2160x3840",
+]);
 export const openAIQualitySchema = z.enum(["auto", "high", "medium", "low"]);
 export const openAIBackgroundSchema = z.enum(["auto", "transparent", "opaque"]);
 
@@ -36,7 +27,7 @@ export const geminiImageSizeSchema = z.enum(["1K", "2K", "4K"]);
 export const openAIInputShape = {
   prompt: z.string().describe(sharedDescriptions.prompt),
   output_path: z.string().describe(sharedDescriptions.outputPath),
-  model: openAIModelSchema.default("gpt-image-1.5").describe("Model: gpt-image-1.5"),
+  model: openAIModelSchema.default("gpt-image-2").describe("Model: gpt-image-2 or gpt-image-1.5"),
   input_images: z.array(z.string()).optional().describe(sharedDescriptions.inputImages),
   size: openAISizeSchema.default("auto").describe("Image size"),
   quality: openAIQualitySchema.default("auto").describe("Image quality"),

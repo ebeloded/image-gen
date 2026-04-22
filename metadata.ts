@@ -12,7 +12,6 @@ import {
   openAIQualitySchema,
   openAISizeSchema,
   sharedDescriptions,
-  toolMetadata,
 } from "./schemas.ts";
 
 export type Provider = "openai" | "gemini" | "grok";
@@ -31,9 +30,6 @@ type FlagSpec = {
 type ProviderSpec = {
   command: Provider;
   summary: string;
-  toolName: string;
-  toolTitle: string;
-  toolDescription: string;
   outputExtensions: readonly string[];
   flags: readonly FlagSpec[];
 };
@@ -69,9 +65,6 @@ export const providerSpecs: Record<Provider, ProviderSpec> = {
   grok: {
     command: "grok",
     summary: "Generate/edit via xAI Grok",
-    toolName: toolMetadata.grok.name,
-    toolTitle: toolMetadata.grok.title,
-    toolDescription: toolMetadata.grok.description,
     outputExtensions: [".jpg", ".jpeg"],
     flags: [
       {
@@ -95,15 +88,12 @@ export const providerSpecs: Record<Provider, ProviderSpec> = {
   openai: {
     command: "openai",
     summary: "Generate/edit via OpenAI",
-    toolName: toolMetadata.openai.name,
-    toolTitle: toolMetadata.openai.title,
-    toolDescription: toolMetadata.openai.description,
     outputExtensions: [".png", ".jpg", ".jpeg", ".webp"],
     flags: [
       {
         name: "model",
         description: "Model",
-        defaultValue: "gpt-image-1.5",
+        defaultValue: "gpt-image-2",
         allowedValues: openAIModelSchema.options,
       },
       {
@@ -129,9 +119,6 @@ export const providerSpecs: Record<Provider, ProviderSpec> = {
   gemini: {
     command: "gemini",
     summary: "Generate/edit via Gemini",
-    toolName: toolMetadata.gemini.name,
-    toolTitle: toolMetadata.gemini.title,
-    toolDescription: toolMetadata.gemini.description,
     outputExtensions: [".png"],
     flags: [
       {

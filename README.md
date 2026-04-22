@@ -1,20 +1,18 @@
-# images-mcp
+# image-gen
 
-Generate and edit images from the command line (`images-mcp`) or as an MCP server.
+Command-line tool for generating and editing images with OpenAI (GPT Image), Google Gemini, and xAI Grok.
 
 ## Requirements
 
 - Bun `>=1.0.0`
 
-## CLI (Primary Interface)
-
-### Quick Start
+## Quick Start
 
 ```bash
 bun install
 ```
 
-Set API keys (use one or both providers):
+Set API keys (use whichever providers you need):
 
 ```bash
 export OPENAI_API_KEY="..."
@@ -22,7 +20,7 @@ export GEMINI_API_KEY="..."   # or GOOGLE_API_KEY
 export XAI_API_KEY="..."
 ```
 
-### API Key Management
+## API Key Management
 
 Store keys persistently in `~/.config/image-gen/config.json`:
 
@@ -41,14 +39,16 @@ echo "sk-proj-..." | image-gen keys set openai
 View and manage keys:
 
 ```bash
-image-gen keys           # show all key statuses (masked)
-image-gen keys get openai  # print raw key value
-image-gen keys delete openai  # remove a key
+image-gen keys               # show all key statuses (masked)
+image-gen keys get openai    # print raw key value
+image-gen keys delete openai # remove a key
 ```
 
 Environment variables (`OPENAI_API_KEY`, `GEMINI_API_KEY`/`GOOGLE_API_KEY`, `XAI_API_KEY`) still work alongside the config file. Both are shown in `image-gen keys list`.
 
 A local `.image-gen.json` in the working directory takes precedence over the user config (for project-level overrides).
+
+## Running
 
 Run directly from this repo:
 
@@ -56,92 +56,78 @@ Run directly from this repo:
 bun run cli.ts --help
 ```
 
-If `images-mcp` is on your `PATH`, you can run:
+After a package install or link, the `image-gen` binary is on your `PATH`:
 
 ```bash
-images-mcp --help
+image-gen --help
 ```
 
-### Install/Run Modes
-
-1. Source checkout mode (always works in this repo):
-   - `bun run cli.ts <command> [flags]`
-2. Binary-on-path mode (after package/global install or linking):
-   - `images-mcp <command> [flags]`
-3. MCP server mode (for MCP clients, stdio transport):
-   - `bun run start` (same as `bun run mcp.ts`)
-
-### Commands
+## Commands
 
 ```bash
-images-mcp openai [flags]
-images-mcp gemini [flags]
-images-mcp grok [flags]
-images-mcp keys [subcommand]
-images-mcp --help
+image-gen openai [flags]
+image-gen gemini [flags]
+image-gen grok   [flags]
+image-gen keys   [subcommand]
+image-gen --help
 ```
 
-### CLI Flags (Full Reference)
+## CLI Flags (Full Reference)
 
-Common flags (both commands):
+Common flags (all generation commands):
 
 | Flag | Required | Default | Notes |
 |---|---|---|---|
 | `--prompt <text>`, `-p <text>` | yes* | - | Prompt or edit instructions (`*` can be read from stdin or positional args when `--prompt`/`-p` is omitted) |
 | `--output <path>`, `-o <path>` | yes | - | Output file path |
 | `--input <path>`, `-i <path>` | no | - | Repeatable input image path (`--input=a.png,b.png` also supported) |
+| `--force`, `-f` | no | - | Overwrite output file if it already exists |
 | `--help`, `-h` | no | - | Print usage |
 
 Permissive CLI input forms:
 
 - `--flag value`
 - `--flag=value`
-- short aliases (`-p`, `-o`, `-i`)
+- short aliases (`-p`, `-o`, `-i`, `-f`)
 - positional prompt fallback when `--prompt`/`-p` is omitted
 
-OpenAI flags (`images-mcp openai`):
+OpenAI flags (`image-gen openai`):
 
 | Flag | Required | Default | Allowed values |
 |---|---|---|---|
-| `--model <value>` | no | `gpt-image-1.5` | `gpt-image-1.5` |
-| `--size <value>` | no | `auto` | `auto`, `1024x1024`, `1536x1024`, `1024x1536` |
+| `--model <value>` | no | `gpt-image-2` | `gpt-image-2`, `gpt-image-1.5` |
+| `--size <value>` | no | `auto` | `auto`, `1024x1024`, `1536x1024`, `1024x1536`, `2048x2048`, `2048x1152`, `3840x2160`, `2160x3840` |
 | `--quality <value>` | no | `auto` | `auto`, `high`, `medium`, `low` |
-| `--background <value>` | no | `auto` | `auto`, `transparent`, `opaque` |
+| `--background <value>` | no | `auto` | `auto`, `transparent`, `opaque` (note: `transparent` is not supported on `gpt-image-2`) |
 
-OpenAI output file extensions:
+OpenAI output file extensions: `.png`, `.jpg`, `.jpeg`, `.webp`
 
-- `.png`, `.jpg`, `.jpeg`, `.webp`
-
-Gemini flags (`images-mcp gemini`):
+Gemini flags (`image-gen gemini`):
 
 | Flag | Required | Default | Allowed values |
 |---|---|---|---|
-| `--model <value>` | no | `gemini-3-pro-image-preview` | `gemini-3-pro-image-preview`, `gemini-2.5-flash-image` |
+| `--model <value>` | no | `gemini-3.1-flash-image-preview` | `gemini-2.5-flash-image`, `gemini-3-pro-image-preview`, `gemini-3.1-flash-image-preview` |
 | `--aspect-ratio <value>` | no | unset | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9` |
 | `--image-size <value>` | no | unset | `1K`, `2K`, `4K` |
 
-Gemini output file extensions:
+Gemini output file extensions: `.png`
 
-- `.png`
-
-Grok flags (`images-mcp grok`):
+Grok flags (`image-gen grok`):
 
 | Flag | Required | Default | Allowed values |
 |---|---|---|---|
 | `--model <value>` | no | `grok-2-image` | `grok-2-image` |
-| `--aspect-ratio <value>` | no | unset | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9` |
-| `--resolution <value>` | no | unset | `HD`, `FHD` |
+| `--aspect-ratio <value>` | no | unset | `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`, `2:1`, `1:2`, `19.5:9`, `9:19.5`, `20:9`, `9:20` |
+| `--resolution <value>` | no | unset | `1k`, `2k` |
 
-Grok output file extensions:
+Grok output file extensions: `.jpg`, `.jpeg`
 
-- `.jpg`, `.jpeg`
-
-### CLI Examples
+## CLI Examples
 
 Generate with OpenAI:
 
 ```bash
-bun run cli.ts openai \
+image-gen openai \
   --prompt "A neon cat in rainy Tokyo, cinematic lighting" \
   --output ./cat.png
 ```
@@ -149,19 +135,19 @@ bun run cli.ts openai \
 Generate with OpenAI by piping prompt from stdin:
 
 ```bash
-cat prompt.txt | bun run cli.ts openai --output ./cat.png
+cat prompt.txt | image-gen openai --output ./cat.png
 ```
 
 Or with stdin redirection:
 
 ```bash
-bun run cli.ts openai --output ./cat.png < prompt.txt
+image-gen openai --output ./cat.png < prompt.txt
 ```
 
 Edit with OpenAI:
 
 ```bash
-bun run cli.ts openai \
+image-gen openai \
   --prompt "Add snow and keep the cat centered" \
   --output ./cat-snow.png \
   --input ./cat.png
@@ -170,7 +156,7 @@ bun run cli.ts openai \
 Generate with Gemini:
 
 ```bash
-bun run cli.ts gemini \
+image-gen gemini \
   --prompt "A ceramic teapot product photo on white background" \
   --output ./teapot.png \
   --aspect-ratio 4:3 \
@@ -180,14 +166,14 @@ bun run cli.ts gemini \
 Edit with Gemini and multiple references:
 
 ```bash
-bun run cli.ts gemini \
+image-gen gemini \
   --prompt "Combine both references into one consistent illustration" \
   --output ./combined.png \
   --input ./ref-1.png \
   --input ./ref-2.png
 ```
 
-### JSON Output Behavior
+## JSON Output Behavior
 
 Successful runs print formatted JSON to stdout. Shape:
 
@@ -204,8 +190,9 @@ Provider-specific success fields:
 
 - OpenAI: `model`, `size`, `quality`, `input_images_count`
 - Gemini: `model`, `aspect_ratio`, `image_size`, `input_images_count`
+- Grok: `model`, `aspect_ratio`, `resolution`, `input_images_count`
 
-### Errors and Exit Codes
+## Errors and Exit Codes
 
 - Exit `0`: Help (`--help`) or successful generation.
 - Exit `1`: Argument parsing/validation errors, runtime errors, API/auth errors, file errors.
@@ -223,27 +210,20 @@ Common parse failures:
 - Unexpected positional argument:
   - `Unexpected argument: value`
 - Invalid enum value:
-  - `Invalid value for --size: "500x500". Allowed values: auto, 1024x1024, 1536x1024, 1024x1536`
+  - `Invalid value for --size: "500x500". Allowed values: auto, 1024x1024, ...`
 
 ## Troubleshooting
 
 ### Missing API Key
 
-OpenAI command without `OPENAI_API_KEY` fails in the OpenAI SDK.
-
-Gemini command without both `GEMINI_API_KEY` and `GOOGLE_API_KEY` fails with:
+Each provider command requires its key to be set either in the config file or as an environment variable:
 
 ```text
 Error: Missing GEMINI_API_KEY or GOOGLE_API_KEY environment variable
-```
-
-Grok command without `XAI_API_KEY` fails with:
-
-```text
 Error: Missing XAI_API_KEY environment variable
 ```
 
-Fix -- set keys via config (preferred) or environment variables:
+Fix — set keys via config (preferred) or environment variables:
 
 ```bash
 image-gen keys set openai sk-proj-...
@@ -251,56 +231,8 @@ image-gen keys set gemini AIza...
 image-gen keys set grok xai-...
 ```
 
-Or via environment:
-
-```bash
-export OPENAI_API_KEY="..."
-export GEMINI_API_KEY="..."   # or GOOGLE_API_KEY
-export XAI_API_KEY="..."
-```
-
 ### Invalid or Unsupported Flags
 
-If you pass a flag not supported by the selected command, the CLI exits with code `1` and prints a command-specific unknown-flag message.
+If you pass a flag not supported by the selected command, the CLI exits with code `1` and prints a command-specific unknown-flag message with a suggestion when a close match exists.
 
 If you pass an unsupported value, the CLI prints the allowed values for that flag.
-
-## MCP Server (Also Supported)
-
-The same image functionality is available over MCP/stdin-stdout transport.
-
-Start server:
-
-```bash
-bun run start
-```
-
-Registered MCP tools:
-
-1. `openai_generate_image`
-2. `gemini_generate_image`
-
-Tool parameter defaults/options mirror the same schemas used by the CLI:
-
-OpenAI tool params:
-
-| Parameter | Default | Allowed values |
-|---|---|---|
-| `prompt` | required | text |
-| `output_path` | required | path |
-| `model` | `gpt-image-1.5` | `gpt-image-1.5` |
-| `input_images` | unset | string[] |
-| `size` | `auto` | `auto`, `1024x1024`, `1536x1024`, `1024x1536` |
-| `quality` | `auto` | `auto`, `high`, `medium`, `low` |
-| `background` | `auto` | `auto`, `transparent`, `opaque` |
-
-Gemini tool params:
-
-| Parameter | Default | Allowed values |
-|---|---|---|
-| `prompt` | required | text |
-| `output_path` | required | path |
-| `model` | `gemini-3-pro-image-preview` | `gemini-3-pro-image-preview`, `gemini-2.5-flash-image` |
-| `input_images` | unset | string[] |
-| `aspect_ratio` | unset | `1:1`, `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9` |
-| `image_size` | unset | `1K`, `2K`, `4K` |

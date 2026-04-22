@@ -52,13 +52,15 @@ export async function generateOpenAIImage({
   }
   const imageFiles = toOpenAIUploadFiles(loadedImages.data);
 
+  const sdkSize = size === "auto" ? undefined : (size as "1024x1024" | "1536x1024" | "1024x1536");
+
   if (imageFiles.length > 0) {
     const imagePayload = imageFiles.length === 1 ? imageFiles[0]! : imageFiles;
     const response = await getOpenAI().images.edit({
       model,
       prompt,
       image: imagePayload,
-      size: size === "auto" ? undefined : size,
+      size: sdkSize,
       background,
       output_format: outputFormat.format,
     });
@@ -69,7 +71,7 @@ export async function generateOpenAIImage({
       model,
       prompt,
       n: 1,
-      size: size === "auto" ? undefined : size,
+      size: sdkSize,
       quality,
       background,
       output_format: outputFormat.format,
