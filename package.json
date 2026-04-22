@@ -1,6 +1,6 @@
 {
   "name": "@ebeloded/image-gen",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "CLI for AI image generation using OpenAI, Google Gemini, and xAI Grok",
   "type": "module",
   "bin": {
@@ -36,12 +36,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ebeloded/image-gen.git"
+    "url": "git+https://github.com/zhendalf/image-gen.git"
   },
   "bugs": {
-    "url": "https://github.com/ebeloded/image-gen/issues"
+    "url": "https://github.com/zhendalf/image-gen/issues"
   },
-  "homepage": "https://github.com/ebeloded/image-gen#readme",
+  "homepage": "https://github.com/zhendalf/image-gen#readme",
   "engines": {
     "bun": ">=1.0.0"
   },
